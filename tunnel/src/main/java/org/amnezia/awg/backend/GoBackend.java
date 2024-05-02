@@ -58,7 +58,7 @@ public final class GoBackend implements Backend {
      * @param context An Android {@link Context}
      */
     public GoBackend(final Context context) {
-        SharedLibraryLoader.loadSharedLibrary(context, "wg-go");
+        SharedLibraryLoader.loadSharedLibrary(context, "am-go");
         this.context = context;
     }
 
