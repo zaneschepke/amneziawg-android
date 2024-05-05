@@ -4,6 +4,24 @@
 
 This is an Android GUI for [AmneziaWG](https://amnezia.org/learn-more/31_amneziawg).
 
+Library on Maven Central: [amenziawg-android](https://central.sonatype.com/artifact/com.zaneschepke/amneziawg-android)
+
+## Use the amneziawg-android library
+
+settings.gradle.kts
+```
+repositories {
+  mavenCentral()
+}
+```
+
+build.gradle.kts
+```
+dependencies {
+    implementation("com.zaneschepke:amneziawg-android:1.2.0")
+}
+```
+
 ## Building
 
 ```
