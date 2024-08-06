@@ -36,6 +36,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.amnezia.awg.backend.NoopTunnelActionHandler
+import org.amnezia.awg.backend.RootTunnelActionHandler
+import org.amnezia.awg.backend.TunnelActionHandler
 import java.lang.ref.WeakReference
 import java.util.Locale
 
@@ -62,9 +65,11 @@ class Application : android.app.Application() {
 
     private suspend fun determineBackend(): Backend {
         var backend: Backend? = null
+        var tunnelActionHandler : TunnelActionHandler = NoopTunnelActionHandler()
         if (UserKnobs.enableKernelModule.first() && AwgQuickBackend.hasKernelSupport()) {
             try {
                 rootShell.start()
+                tunnelActionHandler = RootTunnelActionHandler(rootShell)
                 val awgQuickBackend = AwgQuickBackend(applicationContext, rootShell, toolsInstaller)
                 awgQuickBackend.setMultipleTunnels(UserKnobs.multipleTunnels.first())
                 backend = awgQuickBackend
@@ -72,10 +77,11 @@ class Application : android.app.Application() {
                     awgQuickBackend.setMultipleTunnels(it)
                 }.launchIn(coroutineScope)
             } catch (ignored: Exception) {
+                tunnelActionHandler = NoopTunnelActionHandler()
             }
         }
         if (backend == null) {
-            backend = GoBackend(applicationContext)
+            backend = GoBackend(applicationContext, tunnelActionHandler)
             GoBackend.setAlwaysOnCallback { get().applicationScope.launch { get().tunnelManager.restoreState(true) } }
         }
         return backend

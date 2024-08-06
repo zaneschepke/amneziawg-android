@@ -14,6 +14,7 @@ import org.amnezia.awg.crypto.KeyPair;
 import org.amnezia.awg.util.NonNullForAll;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -55,6 +56,10 @@ public final class Interface {
     private final Optional<Long> responsePacketMagicHeader;
     private final Optional<Long> underloadPacketMagicHeader;
     private final Optional<Long> transportPacketMagicHeader;
+    private final List<String> preUp;
+    private final List<String> postUp;
+    private final List<String> preDown;
+    private final List<String> postDown;
 
     private Interface(final Builder builder) {
         // Defensively copy to ensure immutability even if the Builder is reused.
@@ -75,6 +80,10 @@ public final class Interface {
         responsePacketMagicHeader = builder.responsePacketMagicHeader;
         underloadPacketMagicHeader = builder.underloadPacketMagicHeader;
         transportPacketMagicHeader = builder.transportPacketMagicHeader;
+        preUp = Collections.unmodifiableList(new ArrayList<>(builder.preUp));
+        postUp = Collections.unmodifiableList(new ArrayList<>(builder.postUp));
+        preDown = Collections.unmodifiableList(new ArrayList<>(builder.preDown));
+        postDown = Collections.unmodifiableList(new ArrayList<>(builder.postDown));
     }
 
     /**
@@ -140,6 +149,18 @@ public final class Interface {
                 case "h4":
                     builder.parseTransportPacketMagicHeader(attribute.getValue());
                     break;
+                case "preup":
+                    builder.parsePreUp(attribute.getValue());
+                    break;
+                case "postup":
+                    builder.parsePostUp(attribute.getValue());
+                    break;
+                case "predown":
+                    builder.parsePreDown(attribute.getValue());
+                    break;
+                case "postdown":
+                    builder.parsePostDown(attribute.getValue());
+                    break;
                 default:
                     throw new BadConfigException(Section.INTERFACE, Location.TOP_LEVEL,
                             Reason.UNKNOWN_ATTRIBUTE, attribute.getKey());
@@ -169,7 +190,11 @@ public final class Interface {
                 && initPacketMagicHeader.equals(other.initPacketMagicHeader)
                 && responsePacketMagicHeader.equals(other.responsePacketMagicHeader)
                 && underloadPacketMagicHeader.equals(other.underloadPacketMagicHeader)
-                && transportPacketMagicHeader.equals(other.transportPacketMagicHeader);
+                && transportPacketMagicHeader.equals(other.transportPacketMagicHeader)
+                && preUp.equals(other.preUp)
+                && postUp.equals(other.postUp)
+                && preDown.equals(other.preDown)
+                && postDown.equals(other.postDown);
     }
 
     /**
@@ -330,6 +355,22 @@ public final class Interface {
         return transportPacketMagicHeader;
     }
 
+    public List<String> getPreUp() {
+        return preUp;
+    }
+
+    public List<String> getPostUp() {
+        return postUp;
+    }
+
+    public List<String> getPreDown() {
+        return preDown;
+    }
+
+    public List<String> getPostDown() {
+        return postDown;
+    }
+
 
     @Override
     public int hashCode() {
@@ -350,6 +391,10 @@ public final class Interface {
         hash = 31 * hash + responsePacketMagicHeader.hashCode();
         hash = 31 * hash + underloadPacketMagicHeader.hashCode();
         hash = 31 * hash + transportPacketMagicHeader.hashCode();
+        hash = 31 * hash + preUp.hashCode();
+        hash = 31 * hash + postUp.hashCode();
+        hash = 31 * hash + preDown.hashCode();
+        hash = 31 * hash + postDown.hashCode();
         return hash;
     }
 
@@ -399,6 +444,14 @@ public final class Interface {
         underloadPacketMagicHeader.ifPresent(h3 -> sb.append("H3 = ").append(h3).append('\n'));
         transportPacketMagicHeader.ifPresent(h4 -> sb.append("H4 = ").append(h4).append('\n'));
         sb.append("PrivateKey = ").append(keyPair.getPrivateKey().toBase64()).append('\n');
+        for (final String script : preUp)
+            sb.append("PreUp = ").append(script).append('\n');
+        for (final String script : postUp)
+            sb.append("PostUp = ").append(script).append('\n');
+        for (final String script : preDown)
+            sb.append("PreDown = ").append(script).append('\n');
+        for (final String script : postDown)
+            sb.append("PostDown = ").append(script).append('\n');
         return sb.toString();
     }
 
@@ -460,6 +513,13 @@ public final class Interface {
         private Optional<Long> underloadPacketMagicHeader = Optional.empty();
         // Defaults to not present.
         private Optional<Long> transportPacketMagicHeader = Optional.empty();
+        private List<String> preUp = new ArrayList<>();
+        // Defaults to empty list
+        private List<String> postUp = new ArrayList<>();
+        // Defaults to empty list
+        private List<String> preDown = new ArrayList<>();
+        // Defaults to empty list
+        private List<String> postDown = new ArrayList<>();
 
 
         public Builder addAddress(final InetNetwork address) {
@@ -653,6 +713,27 @@ public final class Interface {
                 throw new BadConfigException(Section.INTERFACE, Location.PRIVATE_KEY, e);
             }
         }
+
+        public Builder parsePreUp(final String script) {
+            preUp.add(script);
+            return this;
+        }
+
+        public Builder parsePostUp(final String script) {
+            postUp.add(script);
+            return this;
+        }
+
+        public Builder parsePreDown(final String script) {
+            preDown.add(script);
+            return this;
+        }
+
+        public Builder parsePostDown(final String script) {
+            postDown.add(script);
+            return this;
+        }
+
 
         public Builder setKeyPair(final KeyPair keyPair) {
             this.keyPair = keyPair;
