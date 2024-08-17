@@ -160,9 +160,9 @@ public final class Config {
      *
      * @return the {@code Config} represented as one [Interface] and zero or more [Peer] sections
      */
-    public String toAwgQuickString() {
+    public String toAwgQuickString(final Boolean includeScripts) {
         final StringBuilder sb = new StringBuilder();
-        sb.append("[Interface]\n").append(interfaze.toAwgQuickString());
+        sb.append("[Interface]\n").append(interfaze.toAwgQuickString(includeScripts));
         for (final Peer peer : peers)
             sb.append("\n[Peer]\n").append(peer.toAwgQuickString());
         return sb.toString();

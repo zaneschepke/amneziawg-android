@@ -173,7 +173,7 @@ public final class AwgQuickBackend implements Backend {
 
         final File tempFile = new File(localTemporaryDir, tunnel.getName() + ".conf");
         try (final FileOutputStream stream = new FileOutputStream(tempFile, false)) {
-            stream.write(config.toAwgQuickString().getBytes(StandardCharsets.UTF_8));
+            stream.write(config.toAwgQuickString(false).getBytes(StandardCharsets.UTF_8));
         }
         String command = String.format("awg-quick %s '%s'",
                 state.toString().toLowerCase(Locale.ENGLISH), tempFile.getAbsolutePath());

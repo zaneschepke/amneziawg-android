@@ -419,7 +419,7 @@ public final class Interface {
      *
      * @return The {@code Interface} represented as a series of "Key = Value" lines
      */
-    public String toAwgQuickString() {
+    public String toAwgQuickString(final Boolean includeScripts) {
         final StringBuilder sb = new StringBuilder();
         if (!addresses.isEmpty())
             sb.append("Address = ").append(Attribute.join(addresses)).append('\n');
@@ -444,14 +444,16 @@ public final class Interface {
         underloadPacketMagicHeader.ifPresent(h3 -> sb.append("H3 = ").append(h3).append('\n'));
         transportPacketMagicHeader.ifPresent(h4 -> sb.append("H4 = ").append(h4).append('\n'));
         sb.append("PrivateKey = ").append(keyPair.getPrivateKey().toBase64()).append('\n');
-        for (final String script : preUp)
-            sb.append("PreUp = ").append(script).append('\n');
-        for (final String script : postUp)
-            sb.append("PostUp = ").append(script).append('\n');
-        for (final String script : preDown)
-            sb.append("PreDown = ").append(script).append('\n');
-        for (final String script : postDown)
-            sb.append("PostDown = ").append(script).append('\n');
+        if(includeScripts) {
+            for (final String script : preUp)
+                sb.append("PreUp = ").append(script).append('\n');
+            for (final String script : postUp)
+                sb.append("PostUp = ").append(script).append('\n');
+            for (final String script : preDown)
+                sb.append("PreDown = ").append(script).append('\n');
+            for (final String script : postDown)
+                sb.append("PostDown = ").append(script).append('\n');
+        }
         return sb.toString();
     }
 
