@@ -18,7 +18,7 @@ dependencyResolutionManagement {
 }
 
 plugins {
-    id("com.android.settings") version "8.6.0-rc01"
+    id("com.android.settings") version "8.7.2"
 }
 
 rootProject.name = "amneziawg-android"
