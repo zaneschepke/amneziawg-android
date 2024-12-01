@@ -8,6 +8,7 @@ package org.amnezia.awg.backend;
 import org.amnezia.awg.config.Config;
 import org.amnezia.awg.util.NonNullForAll;
 
+import java.util.Collection;
 import java.util.Set;
 
 import androidx.annotation.Nullable;
@@ -33,6 +34,14 @@ public interface Backend {
      * @throws Exception Exception raised when retrieving tunnel's state.
      */
     Tunnel.State getState(Tunnel tunnel) throws Exception;
+
+    /**
+     * Get the state of the backend.
+     *
+     * @return The state of the backend.
+     * @throws Exception Exception raised when retrieving tunnel's state.
+     */
+    BackendState getBackendState() throws Exception;
 
     /**
      * Get statistics about traffic and errors on this tunnel. If the tunnel is not running, the
@@ -64,4 +73,13 @@ public interface Backend {
      * @throws Exception Exception raised while changing state.
      */
     Tunnel.State setState(Tunnel tunnel, Tunnel.State state, @Nullable Config config) throws Exception;
+
+
+    BackendState setBackendState(BackendState backendState, Collection<String> allowedIps) throws Exception;
+
+    enum BackendState {
+        KILL_SWITCH_ACTIVE,
+        SERVICE_ACTIVE,
+        INACTIVE
+    }
 }

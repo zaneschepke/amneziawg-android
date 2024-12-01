@@ -79,6 +79,12 @@ public final class AwgQuickBackend implements Backend {
     }
 
     @Override
+    public BackendState getBackendState() throws Exception {
+        //this not really needed for kernel
+        return BackendState.SERVICE_ACTIVE;
+    }
+
+    @Override
     public Statistics getStatistics(final Tunnel tunnel) {
         final Statistics stats = new Statistics();
         final Collection<String> output = new ArrayList<>();
@@ -164,6 +170,12 @@ public final class AwgQuickBackend implements Backend {
             setStateInternal(tunnel, originalConfig == null ? config : originalConfig, State.DOWN);
         }
         return state;
+    }
+
+    @Override
+    public BackendState setBackendState(BackendState backendState, Collection<String> allowedIps) throws Exception {
+        //this not really needed for kernel
+        return BackendState.SERVICE_ACTIVE;
     }
 
     private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state) throws Exception {

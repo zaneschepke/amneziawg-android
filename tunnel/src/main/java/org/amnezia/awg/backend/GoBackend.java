@@ -5,6 +5,13 @@
 
 package org.amnezia.awg.backend;
 
+import static org.amnezia.awg.GoBackend.awgGetConfig;
+import static org.amnezia.awg.GoBackend.awgGetSocketV4;
+import static org.amnezia.awg.GoBackend.awgGetSocketV6;
+import static org.amnezia.awg.GoBackend.awgTurnOff;
+import static org.amnezia.awg.GoBackend.awgTurnOn;
+import static org.amnezia.awg.GoBackend.awgVersion;
+
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -12,9 +19,11 @@ import android.os.ParcelFileDescriptor;
 import android.system.OsConstants;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
+import androidx.collection.ArraySet;
+
 import org.amnezia.awg.backend.BackendException.Reason;
 import org.amnezia.awg.backend.Tunnel.State;
-import org.amnezia.awg.util.SharedLibraryLoader;
 import org.amnezia.awg.config.Config;
 import org.amnezia.awg.config.InetEndpoint;
 import org.amnezia.awg.config.InetNetwork;
@@ -22,20 +31,17 @@ import org.amnezia.awg.config.Peer;
 import org.amnezia.awg.crypto.Key;
 import org.amnezia.awg.crypto.KeyFormatException;
 import org.amnezia.awg.util.NonNullForAll;
+import org.amnezia.awg.util.SharedLibraryLoader;
 
+import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import androidx.annotation.Nullable;
-import androidx.collection.ArraySet;
-
-import static org.amnezia.awg.GoBackend.*;
 
 /**
  * Implementation of {@link Backend} that uses the amneziawg-go userspace implementation to provide
@@ -46,12 +52,15 @@ public final class GoBackend implements Backend {
     private static final int DNS_RESOLUTION_RETRIES = 10;
     private static final String TAG = "AmneziaWG/GoBackend";
     @Nullable private static AlwaysOnCallback alwaysOnCallback;
-    private static GhettoCompletableFuture<VpnService> vpnService = new GhettoCompletableFuture<>();
+    private static CompletableFuture<VpnService> vpnService = new CompletableFuture<>();
     private final Context context;
     private final TunnelActionHandler tunnelActionHandler;
     @Nullable private Config currentConfig;
     @Nullable private Tunnel currentTunnel;
     private int currentTunnelHandle = -1;
+    private BackendState backendState = BackendState.INACTIVE;
+    private BackendState backendSettingState = BackendState.INACTIVE;
+    private Collection<String> allowedIps = Collections.emptyList();
 
     /**
      * Public constructor for GoBackend.
@@ -100,6 +109,11 @@ public final class GoBackend implements Backend {
     @Override
     public State getState(final Tunnel tunnel) {
         return currentTunnel == tunnel ? State.UP : State.DOWN;
+    }
+
+    @Override
+    public BackendState getBackendState() throws Exception {
+        return backendState;
     }
 
     /**
@@ -217,6 +231,36 @@ public final class GoBackend implements Backend {
         return getState(tunnel);
     }
 
+    @Override
+    public BackendState setBackendState(BackendState backendState, Collection<String> allowedIps) throws Exception {
+        this.allowedIps = allowedIps;
+        this.backendSettingState = backendState;
+        if(this.backendState == backendState) return backendState;
+        switch (backendState) {
+            case KILL_SWITCH_ACTIVE -> {
+                activateKillSwitch(allowedIps);
+            }
+            case SERVICE_ACTIVE -> {
+                Log.i(TAG, "Service active shutdown state set");
+            }
+            case INACTIVE -> {
+                shutdown();
+            }
+        }
+        return backendSettingState;
+    }
+
+    private void shutdown() throws Exception {
+        if(backendState == BackendState.INACTIVE) return;
+        try {
+            vpnService.get(0, TimeUnit.NANOSECONDS).stopSelf();
+        } catch (final TimeoutException | ExecutionException | InterruptedException e) {
+            final Exception be = new BackendException(Reason.SERVICE_NOT_RUNNING);
+            be.initCause(e);
+            throw be;
+        }
+    }
+
     private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state)
             throws Exception {
         Log.i(TAG, "Bringing tunnel " + tunnel.getName() + ' ' + state);
@@ -308,10 +352,11 @@ public final class GoBackend implements Backend {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 builder.setMetered(false);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                service.setUnderlyingNetworks(null);
+
+            service.setUnderlyingNetworks(null);
 
             builder.setBlocking(true);
+            service.deactivateKillSwitch();
             try (final ParcelFileDescriptor tun = builder.establish()) {
                 if (tun == null)
                     throw new BackendException(Reason.TUN_CREATION_ERROR);
@@ -340,12 +385,29 @@ public final class GoBackend implements Backend {
             currentTunnel = null;
             currentTunnelHandle = -1;
             currentConfig = null;
-            try {
-                vpnService.get(0, TimeUnit.NANOSECONDS).stopSelf();
-            } catch (final TimeoutException ignored) { }
+            switch (backendSettingState) {
+                case KILL_SWITCH_ACTIVE -> {
+                    activateKillSwitch(this.allowedIps);
+                }
+                case SERVICE_ACTIVE -> {
+                    Log.i(TAG, "Keeping service alive post shutdown");
+                }
+                case INACTIVE -> {
+                    shutdown();
+                }
+            }
         }
+        tunnel.onStateChange(state );
+    }
 
-        tunnel.onStateChange(state);
+    private void activateKillSwitch(Collection<String> allowedIps) {
+        if(backendState == BackendState.KILL_SWITCH_ACTIVE) return;
+        try {
+            this.allowedIps = allowedIps;
+            vpnService.get(0, TimeUnit.NANOSECONDS).activateKillSwitch(allowedIps);
+        } catch (final TimeoutException | ExecutionException | InterruptedException ignored) {
+            backendState = BackendState.INACTIVE;
+        }
     }
 
     /**
@@ -356,40 +418,13 @@ public final class GoBackend implements Backend {
         void alwaysOnTriggered();
     }
 
-    // TODO: When we finally drop API 21 and move to API 24, delete this and replace with the ordinary CompletableFuture.
-    private static final class GhettoCompletableFuture<V> {
-        private final LinkedBlockingQueue<V> completion = new LinkedBlockingQueue<>(1);
-        private final FutureTask<V> result = new FutureTask<>(completion::peek);
-
-        public boolean complete(final V value) {
-            final boolean offered = completion.offer(value);
-            if (offered)
-                result.run();
-            return offered;
-        }
-
-        public V get() throws ExecutionException, InterruptedException {
-            return result.get();
-        }
-
-        public V get(final long timeout, final TimeUnit unit) throws ExecutionException, InterruptedException, TimeoutException {
-            return result.get(timeout, unit);
-        }
-
-        public boolean isDone() {
-            return !completion.isEmpty();
-        }
-
-        public GhettoCompletableFuture<V> newIncompleteFuture() {
-            return new GhettoCompletableFuture<>();
-        }
-    }
-
     /**
      * {@link android.net.VpnService} implementation for {@link GoBackend}
      */
     public static class VpnService extends android.net.VpnService {
         @Nullable private GoBackend owner;
+
+        @Nullable private ParcelFileDescriptor mInterface;
 
         public Builder getBuilder() {
             return new Builder();
@@ -411,11 +446,42 @@ public final class GoBackend implements Backend {
                     owner.currentTunnel = null;
                     owner.currentTunnelHandle = -1;
                     owner.currentConfig = null;
+                    owner.backendState = BackendState.INACTIVE;
                     tunnel.onStateChange(State.DOWN);
                 }
+
             }
             vpnService = vpnService.newIncompleteFuture();
             super.onDestroy();
+        }
+
+        void activateKillSwitch(Collection<String> allowedIps) {
+            Builder builder = new Builder();
+            Log.i(TAG, "Starting kill switch!");
+            builder.setSession("KillSwitchSession")
+                    .addAddress("10.0.0.2", 32)
+                    .addAddress("2001:db8::2", 64)
+                    .addRoute("::", 0)
+                    .addRoute("0.0.0.0", 0);
+
+            try {
+                mInterface = builder.establish();
+                if(owner != null) owner.backendState = BackendState.KILL_SWITCH_ACTIVE;
+            } catch (Exception ignored) {
+                Log.e(TAG, "Failed to start kill switch");
+            }
+        }
+
+        void deactivateKillSwitch() {
+            if (mInterface != null) {
+                try {
+                    mInterface.close();
+                    if(owner != null) owner.backendState = BackendState.SERVICE_ACTIVE;
+                } catch (IOException e) {
+                    Log.e(TAG, "Failed to stop kill switch");
+                }
+                mInterface = null;
+            }
         }
 
         @Override
@@ -431,6 +497,7 @@ public final class GoBackend implements Backend {
 
         public void setOwner(final GoBackend owner) {
             this.owner = owner;
+            owner.backendState = BackendState.SERVICE_ACTIVE;
         }
     }
 }
