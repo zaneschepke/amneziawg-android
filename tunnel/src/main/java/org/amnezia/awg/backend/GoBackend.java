@@ -463,6 +463,15 @@ public final class GoBackend implements Backend {
                     .addAddress("2001:db8::2", 64)
                     .addRoute("::", 0)
                     .addRoute("0.0.0.0", 0);
+            try {
+                allowedIps.forEach((net) -> {
+                    String[] netSplit = net.split("/");
+                    builder.addRoute(netSplit[0], Integer.parseInt(netSplit[1]));
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to add kill switch allowedIps");
+            }
+
 
             try {
                 mInterface = builder.establish();
