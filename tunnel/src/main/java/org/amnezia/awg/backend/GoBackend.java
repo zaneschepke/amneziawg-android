@@ -233,9 +233,19 @@ public final class GoBackend implements Backend {
 
     @Override
     public BackendState setBackendState(BackendState backendState, Collection<String> allowedIps) throws Exception {
-        this.allowedIps = allowedIps;
         this.backendSettingState = backendState;
-        if(this.backendState == backendState) return backendState;
+        //already active, return
+        if(this.backendState == backendState && this.allowedIps.equals(allowedIps)) return backendState;
+        //tunnel running, set allowedIps and return
+        if(currentTunnel != null) {
+            this.allowedIps = allowedIps;
+            return backendState;
+        }
+        //allowedIps only change while kill switch running
+        if(this.backendState == backendState && backendState == BackendState.KILL_SWITCH_ACTIVE && !this.allowedIps.equals(allowedIps)) {
+            shutdown();
+        }
+        this.allowedIps = allowedIps;
         switch (backendState) {
             case KILL_SWITCH_ACTIVE -> {
                 activateKillSwitch(allowedIps);
