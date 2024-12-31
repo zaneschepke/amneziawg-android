@@ -160,11 +160,11 @@ public final class Config {
      *
      * @return the {@code Config} represented as one [Interface] and zero or more [Peer] sections
      */
-    public String toAwgQuickString(final Boolean includeScripts) {
+    public String toAwgQuickString(final Boolean includeScripts, Boolean preferIpv4) {
         final StringBuilder sb = new StringBuilder();
         sb.append("[Interface]\n").append(interfaze.toAwgQuickString(includeScripts));
         for (final Peer peer : peers)
-            sb.append("\n[Peer]\n").append(peer.toAwgQuickString());
+            sb.append("\n[Peer]\n").append(peer.toAwgQuickString(preferIpv4));
         return sb.toString();
     }
 
@@ -173,12 +173,12 @@ public final class Config {
      *
      * @return the {@code Config} represented as a series of "key=value" lines
      */
-    public String toAwgUserspaceString() {
+    public String toAwgUserspaceString(final Boolean preferIpv4) {
         final StringBuilder sb = new StringBuilder();
         sb.append(interfaze.toAwgUserspaceString());
         sb.append("replace_peers=true\n");
         for (final Peer peer : peers)
-            sb.append(peer.toAwgUserspaceString());
+            sb.append(peer.toAwgUserspaceString(preferIpv4));
         return sb.toString();
     }
 

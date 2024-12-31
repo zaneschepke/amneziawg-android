@@ -206,7 +206,7 @@ public final class GoBackend implements Backend {
      * @throws Exception Exception raised while changing tunnel state.
      */
     @Override
-    public State setState(final Tunnel tunnel, State state, @Nullable final Config config) throws Exception {
+    public State setState(final Tunnel tunnel, State state, @Nullable final Config config, final Boolean preferIpv4) throws Exception {
         final State originalState = getState(tunnel);
 
         if (state == State.TOGGLE)
@@ -217,16 +217,16 @@ public final class GoBackend implements Backend {
             final Config originalConfig = currentConfig;
             final Tunnel originalTunnel = currentTunnel;
             if (currentTunnel != null)
-                setStateInternal(currentTunnel, null, State.DOWN);
+                setStateInternal(currentTunnel, null, State.DOWN, preferIpv4);
             try {
-                setStateInternal(tunnel, config, state);
+                setStateInternal(tunnel, config, state, preferIpv4);
             } catch (final Exception e) {
                 if (originalTunnel != null)
-                    setStateInternal(originalTunnel, originalConfig, State.UP);
+                    setStateInternal(originalTunnel, originalConfig, State.UP, preferIpv4);
                 throw e;
             }
         } else if (state == State.DOWN && tunnel == currentTunnel) {
-            setStateInternal(tunnel, null, State.DOWN);
+            setStateInternal(tunnel, null, State.DOWN, preferIpv4);
         }
         return getState(tunnel);
     }
@@ -279,7 +279,7 @@ public final class GoBackend implements Backend {
         }
     }
 
-    private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state)
+    private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state, final Boolean preferIpv4)
             throws Exception {
         Log.i(TAG, "Bringing tunnel " + tunnel.getName() + ' ' + state);
 
@@ -317,7 +317,7 @@ public final class GoBackend implements Backend {
                     final InetEndpoint ep = peer.getEndpoint().orElse(null);
                     if (ep == null)
                         continue;
-                    if (ep.getResolved().orElse(null) == null) {
+                    if (ep.getResolved(preferIpv4).orElse(null) == null) {
                         if (i < DNS_RESOLUTION_RETRIES - 1) {
                             Log.w(TAG, "DNS host \"" + ep.getHost() + "\" failed to resolve; trying again");
                             Thread.sleep(1000);
@@ -330,7 +330,10 @@ public final class GoBackend implements Backend {
             }
 
             // Build config
-            final String goConfig = config.toAwgUserspaceString();
+            final String goConfig = config.toAwgUserspaceString(preferIpv4);
+
+            Log.i(TAG, "Go config \"" + goConfig + "\"");
+
 
             // Create the vpn tunnel with android API
             final VpnService.Builder builder = service.getBuilder();
@@ -415,7 +418,7 @@ public final class GoBackend implements Backend {
                 }
             }
         }
-        tunnel.onStateChange(state );
+        tunnel.onStateChange(state);
     }
 
     private void activateService() {

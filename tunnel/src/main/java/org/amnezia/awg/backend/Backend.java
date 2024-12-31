@@ -72,7 +72,7 @@ public interface Backend {
      * @return The updated state of the tunnel.
      * @throws Exception Exception raised while changing state.
      */
-    Tunnel.State setState(Tunnel tunnel, Tunnel.State state, @Nullable Config config) throws Exception;
+    Tunnel.State setState(Tunnel tunnel, Tunnel.State state, @Nullable Config config, Boolean preferIpv4) throws Exception;
 
 
     BackendState setBackendState(BackendState backendState, Collection<String> allowedIps) throws Exception;
