@@ -489,7 +489,7 @@ public final class GoBackend implements Backend {
                 }
 
             }
-            vpnService = vpnService.newIncompleteFuture();
+            vpnService = new CompletableFuture<>();
             super.onDestroy();
         }
 
