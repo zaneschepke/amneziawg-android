@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.android.library)
     `maven-publish`
     signing
+    id("com.gradleup.nmcp").version("0.0.8")
 }
 
 android {
@@ -126,6 +127,15 @@ publishing {
         }
     }
 }
+
+
+nmcp {
+    publishAllPublications {
+        username = getLocalProperty("MAVEN_CENTRAL_USER")
+        password = getLocalProperty("MAVEN_CENTRAL_PASS")
+    }
+}
+
 
 signing {
     useGpgCmd()
