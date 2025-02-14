@@ -66,9 +66,8 @@ public final class InetEndpoint {
 
     @Override
     public boolean equals(final Object obj) {
-        if (!(obj instanceof InetEndpoint))
+        if (!(obj instanceof InetEndpoint other))
             return false;
-        final InetEndpoint other = (InetEndpoint) obj;
         return host.equals(other.host) && port == other.port;
     }
 

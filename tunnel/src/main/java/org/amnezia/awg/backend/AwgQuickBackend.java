@@ -119,13 +119,11 @@ public final class AwgQuickBackend implements Backend {
     }
 
     @Override
-    public State setState(final Tunnel tunnel, State state, @Nullable final Config config, final Boolean preferIpv4) throws Exception {
+    public State setState(final Tunnel tunnel, State state, @Nullable final Config config) throws Exception {
         final State originalState = getState(tunnel);
         final Config originalConfig = runningConfigs.get(tunnel);
         final Map<Tunnel, Config> runningConfigsSnapshot = new HashMap<>(runningConfigs);
 
-        if (state == State.TOGGLE)
-            state = originalState == State.UP ? State.DOWN : State.UP;
         if ((state == State.UP && originalState == State.UP && originalConfig != null && originalConfig == config) ||
                 (state == State.DOWN && originalState == State.DOWN))
             return originalState;
@@ -135,13 +133,13 @@ public final class AwgQuickBackend implements Backend {
                 final List<Pair<Tunnel, Config>> rewind = new LinkedList<>();
                 try {
                     for (final Map.Entry<Tunnel, Config> entry : runningConfigsSnapshot.entrySet()) {
-                        setStateInternal(entry.getKey(), entry.getValue(), State.DOWN, preferIpv4);
+                        setStateInternal(entry.getKey(), entry.getValue(), State.DOWN);
                         rewind.add(Pair.create(entry.getKey(), entry.getValue()));
                     }
                 } catch (final Exception e) {
                     try {
                         for (final Pair<Tunnel, Config> entry : rewind) {
-                            setStateInternal(entry.first, entry.second, State.UP, preferIpv4);
+                            setStateInternal(entry.first, entry.second, State.UP);
                         }
                     } catch (final Exception ignored) {
                     }
@@ -149,17 +147,17 @@ public final class AwgQuickBackend implements Backend {
                 }
             }
             if (originalState == State.UP)
-                setStateInternal(tunnel, originalConfig == null ? config : originalConfig, State.DOWN, preferIpv4);
+                setStateInternal(tunnel, originalConfig == null ? config : originalConfig, State.DOWN);
             try {
-                setStateInternal(tunnel, config, State.UP, preferIpv4);
+                setStateInternal(tunnel, config, State.UP);
             } catch (final Exception e) {
                 try {
                     if (originalState == State.UP && originalConfig != null) {
-                        setStateInternal(tunnel, originalConfig, State.UP, preferIpv4);
+                        setStateInternal(tunnel, originalConfig, State.UP);
                     }
                     if (!multipleTunnels && originalState == State.DOWN) {
                         for (final Map.Entry<Tunnel, Config> entry : runningConfigsSnapshot.entrySet()) {
-                            setStateInternal(entry.getKey(), entry.getValue(), State.UP, preferIpv4);
+                            setStateInternal(entry.getKey(), entry.getValue(), State.UP);
                         }
                     }
                 } catch (final Exception ignored) {
@@ -167,7 +165,7 @@ public final class AwgQuickBackend implements Backend {
                 throw e;
             }
         } else if (state == State.DOWN) {
-            setStateInternal(tunnel, originalConfig == null ? config : originalConfig, State.DOWN, preferIpv4);
+            setStateInternal(tunnel, originalConfig == null ? config : originalConfig, State.DOWN);
         }
         return state;
     }
@@ -178,14 +176,14 @@ public final class AwgQuickBackend implements Backend {
         return BackendState.SERVICE_ACTIVE;
     }
 
-    private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state, Boolean preferIpv4) throws Exception {
+    private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state) throws Exception {
         Log.i(TAG, "Bringing tunnel " + tunnel.getName() + ' ' + state);
 
         Objects.requireNonNull(config, "Trying to set state up with a null config");
 
         final File tempFile = new File(localTemporaryDir, tunnel.getName() + ".conf");
         try (final FileOutputStream stream = new FileOutputStream(tempFile, false)) {
-            stream.write(config.toAwgQuickString(false, preferIpv4).getBytes(StandardCharsets.UTF_8));
+            stream.write(config.toAwgQuickString(false).getBytes(StandardCharsets.UTF_8));
         }
         String command = String.format("awg-quick %s '%s'",
                 state.toString().toLowerCase(Locale.ENGLISH), tempFile.getAbsolutePath());

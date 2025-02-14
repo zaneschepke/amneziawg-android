@@ -173,11 +173,11 @@ public final class Peer {
      *
      * @return the {@code Peer} represented as a series of "Key = Value" lines
      */
-    public String toAwgQuickString(Boolean preferIpv4) {
+    public String toAwgQuickString() {
         final StringBuilder sb = new StringBuilder();
         if (!allowedIps.isEmpty())
             sb.append("AllowedIPs = ").append(Attribute.join(allowedIps)).append('\n');
-        endpoint.ifPresent(ep -> sb.append("Endpoint = ").append(preferIpv4 ? ep : ep.getResolved(false)).append('\n'));
+        endpoint.ifPresent(ep -> sb.append("Endpoint = ").append(ep).append('\n'));
         persistentKeepalive.ifPresent(pk -> sb.append("PersistentKeepalive = ").append(pk).append('\n'));
         preSharedKey.ifPresent(psk -> sb.append("PreSharedKey = ").append(psk.toBase64()).append('\n'));
         sb.append("PublicKey = ").append(publicKey.toBase64()).append('\n');
