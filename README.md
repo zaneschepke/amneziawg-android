@@ -31,3 +31,9 @@ $ ./gradlew assembleRelease
 ```
 
 macOS users may need [flock(1)](https://github.com/discoteq/flock).
+
+## Publish
+
+```sh
+ ./gradlew publishAllPublicationsToCentralPortal  
+```
