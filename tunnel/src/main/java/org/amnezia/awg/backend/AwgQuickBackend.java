@@ -124,8 +124,6 @@ public final class AwgQuickBackend implements Backend {
         final Config originalConfig = runningConfigs.get(tunnel);
         final Map<Tunnel, Config> runningConfigsSnapshot = new HashMap<>(runningConfigs);
 
-        if (state == State.TOGGLE)
-            state = originalState == State.UP ? State.DOWN : State.UP;
         if ((state == State.UP && originalState == State.UP && originalConfig != null && originalConfig == config) ||
                 (state == State.DOWN && originalState == State.DOWN))
             return originalState;

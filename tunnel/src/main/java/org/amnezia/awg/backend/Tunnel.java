@@ -29,6 +29,9 @@ public interface Tunnel {
      */
     String getName();
 
+
+    Boolean isIpv4ResolutionPreferred();
+
     /**
      * React to a change in state of the tunnel. Should only be directly called by Backend.
      *
@@ -41,7 +44,6 @@ public interface Tunnel {
      */
     enum State {
         DOWN,
-        TOGGLE,
         UP;
 
         /**

@@ -5,6 +5,8 @@
 
 package org.amnezia.awg.config;
 
+import androidx.annotation.Nullable;
+
 import org.amnezia.awg.config.BadConfigException.Location;
 import org.amnezia.awg.config.BadConfigException.Reason;
 import org.amnezia.awg.config.BadConfigException.Section;
@@ -16,11 +18,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-
-import androidx.annotation.Nullable;
 
 /**
  * Represents the contents of a awg-quick configuration file, made up of one or more "Interface"
@@ -36,7 +35,7 @@ public final class Config {
     private Config(final Builder builder) {
         interfaze = Objects.requireNonNull(builder.interfaze, "An [Interface] section is required");
         // Defensively copy to ensure immutability even if the Builder is reused.
-        peers = Collections.unmodifiableList(new ArrayList<>(builder.peers));
+        peers = List.copyOf(builder.peers);
     }
 
     /**
@@ -114,9 +113,8 @@ public final class Config {
 
     @Override
     public boolean equals(final Object obj) {
-        if (!(obj instanceof Config))
+        if (!(obj instanceof Config other))
             return false;
-        final Config other = (Config) obj;
         return interfaze.equals(other.interfaze) && peers.equals(other.peers);
     }
 
@@ -173,12 +171,12 @@ public final class Config {
      *
      * @return the {@code Config} represented as a series of "key=value" lines
      */
-    public String toAwgUserspaceString() {
+    public String toAwgUserspaceString(final Boolean preferIpv4) {
         final StringBuilder sb = new StringBuilder();
         sb.append(interfaze.toAwgUserspaceString());
         sb.append("replace_peers=true\n");
         for (final Peer peer : peers)
-            sb.append(peer.toAwgUserspaceString());
+            sb.append(peer.toAwgUserspaceString(preferIpv4));
         return sb.toString();
     }
 

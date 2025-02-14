@@ -66,9 +66,8 @@ public final class InetEndpoint {
 
     @Override
     public boolean equals(final Object obj) {
-        if (!(obj instanceof InetEndpoint))
+        if (!(obj instanceof InetEndpoint other))
             return false;
-        final InetEndpoint other = (InetEndpoint) obj;
         return host.equals(other.host) && port == other.port;
     }
 
@@ -87,7 +86,7 @@ public final class InetEndpoint {
      *
      * @return the resolved endpoint, or {@link Optional#empty()}
      */
-    public Optional<InetEndpoint> getResolved() {
+    public Optional<InetEndpoint> getResolved(Boolean preferIpv4) {
         if (isResolved)
             return Optional.of(this);
         synchronized (lock) {
@@ -97,10 +96,12 @@ public final class InetEndpoint {
                     // Prefer v4 endpoints over v6 to work around DNS64 and IPv6 NAT issues.
                     final InetAddress[] candidates = InetAddress.getAllByName(host);
                     InetAddress address = candidates[0];
-                    for (final InetAddress candidate : candidates) {
-                        if (candidate instanceof Inet4Address) {
-                            address = candidate;
-                            break;
+                    if(preferIpv4) {
+                        for (final InetAddress candidate : candidates) {
+                            if (candidate instanceof Inet4Address) {
+                                address = candidate;
+                                break;
+                            }
                         }
                     }
                     resolved = new InetEndpoint(address.getHostAddress(), true, port);

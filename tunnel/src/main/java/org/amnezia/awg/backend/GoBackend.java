@@ -49,7 +49,7 @@ import java.util.concurrent.TimeoutException;
  */
 @NonNullForAll
 public final class GoBackend implements Backend {
-    private static final int DNS_RESOLUTION_RETRIES = 10;
+    private static final int DNS_RESOLUTION_RETRIES = 3;
     private static final String TAG = "AmneziaWG/GoBackend";
     @Nullable private static AlwaysOnCallback alwaysOnCallback;
     private static CompletableFuture<VpnService> vpnService = new CompletableFuture<>();
@@ -61,6 +61,7 @@ public final class GoBackend implements Backend {
     private BackendState backendState = BackendState.INACTIVE;
     private BackendState backendSettingState = BackendState.INACTIVE;
     private Collection<String> allowedIps = Collections.emptyList();
+    private volatile boolean cancelDnsRetry = false;
 
     /**
      * Public constructor for GoBackend.
@@ -207,10 +208,8 @@ public final class GoBackend implements Backend {
      */
     @Override
     public State setState(final Tunnel tunnel, State state, @Nullable final Config config) throws Exception {
+        cancelDnsRetry = true;
         final State originalState = getState(tunnel);
-
-        if (state == State.TOGGLE)
-            state = originalState == State.UP ? State.DOWN : State.UP;
         if (state == originalState && tunnel == currentTunnel && config == currentConfig)
             return originalState;
         if (state == State.UP) {
@@ -311,26 +310,38 @@ public final class GoBackend implements Backend {
             }
 
 
-            dnsRetry: for (int i = 0; i < DNS_RESOLUTION_RETRIES; ++i) {
+            cancelDnsRetry = false;
+            dnsRetry: for (int i = 0; i < DNS_RESOLUTION_RETRIES && !cancelDnsRetry; ++i) {
                 // Pre-resolve IPs so they're cached when building the userspace string
                 for (final Peer peer : config.getPeers()) {
+                    if (cancelDnsRetry) {
+                        return; // Exit if cancellation is requested
+                    }
                     final InetEndpoint ep = peer.getEndpoint().orElse(null);
-                    if (ep == null)
-                        continue;
-                    if (ep.getResolved().orElse(null) == null) {
+                    if (ep == null) continue;
+
+                    if (ep.getResolved(tunnel.isIpv4ResolutionPreferred()).orElse(null) == null) {
                         if (i < DNS_RESOLUTION_RETRIES - 1) {
                             Log.w(TAG, "DNS host \"" + ep.getHost() + "\" failed to resolve; trying again");
-                            Thread.sleep(1000);
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return; // Exit if sleep is interrupted
+                            }
+                            if (cancelDnsRetry) return; // Check cancellation after sleep
                             continue dnsRetry;
-                        } else
+                        } else {
                             throw new BackendException(Reason.DNS_RESOLUTION_FAILURE, ep.getHost());
+                        }
                     }
                 }
-                break;
+                if (!cancelDnsRetry) break; // Only break if not cancelled
             }
 
             // Build config
-            final String goConfig = config.toAwgUserspaceString();
+            final String goConfig = config.toAwgUserspaceString(tunnel.isIpv4ResolutionPreferred());
+
 
             // Create the vpn tunnel with android API
             final VpnService.Builder builder = service.getBuilder();
@@ -415,7 +426,7 @@ public final class GoBackend implements Backend {
                 }
             }
         }
-        tunnel.onStateChange(state );
+        tunnel.onStateChange(state);
     }
 
     private void activateService() {
