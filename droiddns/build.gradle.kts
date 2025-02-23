@@ -1,58 +1,34 @@
-@file:Suppress("UnstableApiUsage")
-
-import org.gradle.api.tasks.testing.logging.TestLogEvent
-
-val pkg: String = providers.gradleProperty("amneziawgPackageName").get()
-val cmakeAndroidPackageName: String = providers.environmentVariable("ANDROID_PACKAGE_NAME").getOrElse(pkg)
-
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
     `maven-publish`
     signing
     id("com.gradleup.nmcp").version("0.0.8")
 }
 
 android {
+    namespace = "com.zaneschepke.droiddns"
+    compileSdk = 34
+
+    defaultConfig {
+        minSdk = 24
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    namespace = "${pkg}.tunnel"
-    externalNativeBuild {
-        cmake {
-            path("tools/CMakeLists.txt")
-        }
-    }
-    testOptions.unitTests.all {
-        it.testLogging { events(TestLogEvent.PASSED, TestLogEvent.SKIPPED, TestLogEvent.FAILED) }
-    }
-    buildTypes {
-        all {
-            externalNativeBuild {
-                cmake {
-                    targets("libam-go.so", "libam.so", "libam-quick.so")
-                    arguments("-DGRADLE_USER_HOME=${project.gradle.gradleUserHomeDir}")
-                }
-            }
-        }
-        release {
-            externalNativeBuild {
-                cmake {
-                    arguments("-DANDROID_PACKAGE_NAME=${cmakeAndroidPackageName}")
-                }
-            }
-        }
-        debug {
-            externalNativeBuild {
-                cmake {
-                    arguments("-DANDROID_PACKAGE_NAME=${cmakeAndroidPackageName}.debug")
-                }
-            }
-        }
-    }
-    lint {
-        disable += "LongLogTag"
-        disable += "NewApi"
+    kotlinOptions {
+        jvmTarget = "17"
     }
     publishing {
         singleVariant("release") {
@@ -63,26 +39,30 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.annotation)
-    implementation(libs.androidx.collection)
-    compileOnly(libs.jsr305)
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.google.material)
     testImplementation(libs.junit)
-    implementation(libs.droiddns)
-//    implementation(project(":droiddns"))
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+
+    //dns
+    implementation(libs.dnsjava)
 }
 
 publishing {
     publications {
         register<MavenPublication>("release") {
             groupId = "com.zaneschepke"
-            artifactId = "amneziawg-android"
-            version = providers.gradleProperty("amneziawgVersionName").get()
+            artifactId = "droiddns"
+            version = "1.0.0"
             afterEvaluate {
                 from(components["release"])
             }
             pom {
-                name.set("Amnezia WG Tunnel Library")
-                description.set("Embeddable tunnel library for WG for Android")
+                name.set("Android DNS Resolution Library")
+                description.set("A simple DNS resolution library for Android.")
                 url.set("https://amnezia.org/")
 
                 licenses {
@@ -129,7 +109,6 @@ nmcp {
         password = getLocalProperty("MAVEN_CENTRAL_PASS")
     }
 }
-
 
 signing {
     useGpgCmd()

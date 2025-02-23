@@ -196,7 +196,7 @@ public final class Peer {
         sb.append("public_key=").append(publicKey.toHex()).append('\n');
         for (final InetNetwork allowedIp : allowedIps)
             sb.append("allowed_ip=").append(allowedIp).append('\n');
-        endpoint.flatMap(endpoint -> endpoint.getResolved(preferIpv4)).ifPresent(ep -> sb.append("endpoint=").append(ep).append('\n'));
+        endpoint.flatMap(InetEndpoint::getResolved).ifPresent(ep -> sb.append("endpoint=").append(ep).append('\n'));
         persistentKeepalive.ifPresent(pk -> sb.append("persistent_keepalive_interval=").append(pk).append('\n'));
         preSharedKey.ifPresent(psk -> sb.append("preshared_key=").append(psk.toHex()).append('\n'));
         return sb.toString();

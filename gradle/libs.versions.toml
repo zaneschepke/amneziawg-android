@@ -1,29 +1,39 @@
 [versions]
-agp = "8.8.0"
-kotlin = "2.1.0"
+agp = "8.8.0-alpha05"
+dnsjava = "3.6.0"
+droiddns = "1.0.0"
+kotlin = "2.1.10"
+junit = "1.2.1"
+espressoCore = "3.6.1"
+nmcp = "0.0.8"
 
 [libraries]
-androidx-activity-ktx = "androidx.activity:activity-ktx:1.8.2"
-androidx-annotation = "androidx.annotation:annotation:1.7.1"
-androidx-appcompat = "androidx.appcompat:appcompat:1.6.1"
+androidx-activity-ktx = "androidx.activity:activity-ktx:1.10.0"
+androidx-annotation = "androidx.annotation:annotation:1.9.1"
+androidx-appcompat = "androidx.appcompat:appcompat:1.7.0"
 androidx-biometric = "androidx.biometric:biometric:1.1.0"
-androidx-collection = "androidx.collection:collection:1.4.0"
-androidx-constraintlayout = "androidx.constraintlayout:constraintlayout:2.1.4"
+androidx-collection = "androidx.collection:collection:1.4.5"
+androidx-constraintlayout = "androidx.constraintlayout:constraintlayout:2.2.0"
 androidx-coordinatorlayout = "androidx.coordinatorlayout:coordinatorlayout:1.2.0"
-androidx-core-ktx = "androidx.core:core-ktx:1.12.0"
-androidx-datastore-preferences = "androidx.datastore:datastore-preferences:1.0.0"
-androidx-fragment-ktx = "androidx.fragment:fragment-ktx:1.6.2"
-androidx-lifecycle-runtime-ktx = "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"
+androidx-core-ktx = "androidx.core:core-ktx:1.15.0"
+androidx-datastore-preferences = "androidx.datastore:datastore-preferences:1.1.2"
+androidx-fragment-ktx = "androidx.fragment:fragment-ktx:1.8.6"
+androidx-lifecycle-runtime-ktx = "androidx.lifecycle:lifecycle-runtime-ktx:2.8.7"
 androidx-preference-ktx = "androidx.preference:preference-ktx:1.2.1"
-desugarJdkLibs = "com.android.tools:desugar_jdk_libs:2.0.4"
-google-material = "com.google.android.material:material:1.11.0"
+desugarJdkLibs = "com.android.tools:desugar_jdk_libs:2.1.4"
+dnsjava = { module = "dnsjava:dnsjava", version.ref = "dnsjava" }
+droiddns = { module = "com.zaneschepke:droiddns", version.ref = "droiddns" }
+google-material = "com.google.android.material:material:1.12.0"
 jsr305 = "com.google.code.findbugs:jsr305:3.0.2"
 junit = "junit:junit:4.13.2"
-kotlinx-coroutines-android = "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+kotlinx-coroutines-android = "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1"
 zxing-android-embedded = "com.journeyapps:zxing-android-embedded:4.3.0"
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junit" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+nmcp = { id = "com.gradleup.nmcp", version.ref = "nmcp" }

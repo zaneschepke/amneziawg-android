@@ -7,13 +7,8 @@ package org.amnezia.awg.config;
 
 import org.amnezia.awg.util.NonNullForAll;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.UnknownHostException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -34,8 +29,7 @@ public final class InetEndpoint {
     private final boolean isResolved;
     private final Object lock = new Object();
     private final int port;
-    private Instant lastResolution = Instant.EPOCH;
-    @Nullable private InetEndpoint resolved;
+    private Optional<InetEndpoint> resolved = Optional.empty();
 
     private InetEndpoint(final String host, final boolean isResolved, final int port) {
         this.host = host;
@@ -79,39 +73,14 @@ public final class InetEndpoint {
         return port;
     }
 
-    /**
-     * Generate an {@code InetEndpoint} instance with the same port and the host resolved using DNS
-     * to a numeric address. If the host is already numeric, the existing instance may be returned.
-     * Because this function may perform network I/O, it must not be called from the main thread.
-     *
-     * @return the resolved endpoint, or {@link Optional#empty()}
-     */
-    public Optional<InetEndpoint> getResolved(Boolean preferIpv4) {
-        if (isResolved)
-            return Optional.of(this);
+    public void setResolved(String hostAddress) {
         synchronized (lock) {
-            //TODO(zx2c4): Implement a real timeout mechanism using DNS TTL
-            if (Duration.between(lastResolution, Instant.now()).toMinutes() > 1) {
-                try {
-                    // Prefer v4 endpoints over v6 to work around DNS64 and IPv6 NAT issues.
-                    final InetAddress[] candidates = InetAddress.getAllByName(host);
-                    InetAddress address = candidates[0];
-                    if(preferIpv4) {
-                        for (final InetAddress candidate : candidates) {
-                            if (candidate instanceof Inet4Address) {
-                                address = candidate;
-                                break;
-                            }
-                        }
-                    }
-                    resolved = new InetEndpoint(address.getHostAddress(), true, port);
-                    lastResolution = Instant.now();
-                } catch (final UnknownHostException e) {
-                    resolved = null;
-                }
-            }
-            return Optional.ofNullable(resolved);
+            resolved = Optional.of(new InetEndpoint(hostAddress, true, port));
         }
+    }
+
+    public Optional<InetEndpoint> getResolved() {
+        return resolved;
     }
 
     @Override
