@@ -2,12 +2,11 @@ package com.zaneschepke.droiddns
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.util.Log
 import org.xbill.DNS.*
-import java.net.InetAddress
-import java.net.UnknownHostException
-
+import java.net.*
 
 
 /**
@@ -26,11 +25,9 @@ class JavaDnsResolver(private val context: Context, private val preferredDnsServ
     }
 
     @Throws(UnknownHostException::class)
-    override fun resolveDns(hostname: String, preferIpv4: Boolean, useCache: Boolean) : List<String> {
+    override fun resolveDns(hostname: String, preferIpv4: Boolean, useCache: Boolean): List<String> {
         val dnsServer = getDefaultDnsServer().hostAddress ?: DEFAULT_FALLBACK_DNS
-
         Log.i(TAG, "Resolving endpoint with server: $dnsServer")
-
         val resolved = if (preferIpv4) {
             resolveIpv4(hostname, dnsServer, useCache).ifEmpty {
                 resolveIpv6(hostname, dnsServer, useCache)
@@ -40,36 +37,57 @@ class JavaDnsResolver(private val context: Context, private val preferredDnsServ
                 resolveIpv4(hostname, dnsServer, useCache)
             }
         }
-
         return resolved.mapNotNull { it.hostAddress }
     }
 
-    private fun getDefaultDnsServer() : InetAddress {
-        return preferredDnsServer?.let { InetAddress.getByName(it) } ?: getSystemDnsServers().firstOrNull() ?: InetAddress.getByName(DEFAULT_FALLBACK_DNS)
+    private fun getDefaultDnsServer(): InetAddress {
+        val dnsServers = getSystemDnsServers()
+        val preferred = preferredDnsServer?.let { InetAddress.getByName(it) }
+        return when {
+            preferred != null -> preferred
+            dnsServers.any { !it.isAnyLocalAddress && it is Inet4Address } -> dnsServers.first { it is Inet4Address }
+            dnsServers.isNotEmpty() -> dnsServers.first()
+            else -> InetAddress.getByName(DEFAULT_FALLBACK_DNS)
+        }
     }
 
     private fun getSystemDnsServers(): List<InetAddress> {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return emptyList()
         val linkProperties = connectivityManager.getLinkProperties(network) ?: return emptyList()
+        val networkCapabilities = connectivityManager.getNetworkCapabilities(network)
+
+        val hasIpv6 = networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+                (networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))
 
         val dnsServers = mutableListOf<InetAddress>()
 
-        // Check for Private DNS (Android 9+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val privateDnsServerName = linkProperties.privateDnsServerName
             if (linkProperties.isPrivateDnsActive && privateDnsServerName != null) {
                 return try {
                     val privateDnsAddresses = resolveIpv4(privateDnsServerName, useCache = false)
-                    dnsServers.addAll(privateDnsAddresses)
-                    dnsServers
+                    dnsServers.addAll(
+                        if (hasIpv6) privateDnsAddresses
+                        else privateDnsAddresses.filterIsInstance<Inet4Address>()
+                    )
+                    if (dnsServers.isEmpty()) {
+                        listOf(InetAddress.getByName(DEFAULT_FALLBACK_DNS))
+                    } else {
+                        dnsServers
+                    }
                 } catch (e: Exception) {
                     listOf(InetAddress.getByName(DEFAULT_FALLBACK_DNS))
                 }
             }
         }
 
-        dnsServers.addAll(linkProperties.dnsServers)
+        dnsServers.addAll(
+            if (hasIpv6) linkProperties.dnsServers
+            else linkProperties.dnsServers.filterIsInstance<Inet4Address>()
+        )
+
         return dnsServers
     }
 
@@ -78,34 +96,61 @@ class JavaDnsResolver(private val context: Context, private val preferredDnsServ
     }
 
     private fun resolve(hostname: String, type: Int, dnsServer: String, useCache: Boolean): List<InetAddress> {
-
-        val recordType = when(type) {
+        val recordType = when (type) {
             Type.AAAA -> "AAAA"
             Type.A -> "A"
             else -> "Unknown"
         }
 
-        val lookup = Lookup(hostname, type)
-        val resolver = SimpleResolver(dnsServer)
-        lookup.setResolver(resolver)
-        lookup.setCache(if(useCache) Cache() else null)
+        try {
+            val lookup = Lookup(hostname, type)
+            val resolver = SimpleResolver(dnsServer)
+            lookup.setResolver(resolver)
+            lookup.setCache(if (useCache) Cache() else null)
 
-        val records = lookup.run()
-        return when (lookup.result) {
-            Lookup.SUCCESSFUL -> records?.map { (it as ARecord).address } ?: emptyList()
-            Lookup.HOST_NOT_FOUND -> emptyList()
-            Lookup.TRY_AGAIN -> {
-                Log.w(TAG,"Failed to resolve $hostname with $dnsServer")
-                emptyList()
+            val records = lookup.run()
+            return when (lookup.result) {
+                Lookup.SUCCESSFUL -> records?.mapNotNull {
+                    when (it) {
+                        is ARecord -> it.address
+                        is AAAARecord -> it.address
+                        else -> null
+                    }
+                } ?: emptyList()
+                Lookup.HOST_NOT_FOUND -> emptyList()
+                Lookup.TRY_AGAIN -> {
+                    Log.w(TAG, "Failed to resolve $hostname with $dnsServer (TRY_AGAIN)")
+                    emptyList()
+                }
+                Lookup.TYPE_NOT_FOUND -> {
+                    Log.w(TAG, "No $recordType records for $hostname")
+                    emptyList()
+                }
+                else -> {
+                    Log.w(TAG, "Unknown DNS error resolving $hostname")
+                    emptyList()
+                }
             }
-            Lookup.TYPE_NOT_FOUND -> {
-                Log.w(TAG, "No $recordType records for $hostname")
-                emptyList()
+        } catch (e: SocketException) {
+            Log.w(TAG, "Network error (SocketException) with $dnsServer for $hostname: ${e.message}")
+            if (dnsServer != DEFAULT_FALLBACK_DNS) {
+                Log.i(TAG, "Retrying with fallback DNS: $DEFAULT_FALLBACK_DNS")
+                return resolve(hostname, type, DEFAULT_FALLBACK_DNS, useCache)
             }
-            else -> {
-                Log.w(TAG,"Unknown DNS error resolving $hostname")
-                emptyList()
+            return emptyList()
+        } catch (e: SocketTimeoutException) {
+            Log.w(TAG, "Timeout error with $dnsServer for $hostname: ${e.message}")
+            if (dnsServer != DEFAULT_FALLBACK_DNS) {
+                Log.i(TAG, "Retrying with fallback DNS: $DEFAULT_FALLBACK_DNS")
+                return resolve(hostname, type, DEFAULT_FALLBACK_DNS, useCache)
             }
+            return emptyList()
+        } catch (e: TextParseException) {
+            Log.w(TAG, "Invalid hostname format: $hostname")
+            return emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Unexpected error resolving $hostname with $dnsServer: ${e.message}")
+            return emptyList()
         }
     }
 
