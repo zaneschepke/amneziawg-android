@@ -21,11 +21,27 @@ class JavaDnsResolver(private val context: Context, private val preferredDnsServ
 
     companion object {
         const val DEFAULT_FALLBACK_DNS = "1.1.1.1"
+
         private val TAG = JavaDnsResolver::class.java.simpleName
+
+        private val IPV6_REGEX = Regex(
+            "^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|" +
+                    "^::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|" +
+                    "^[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$|" +
+                    "^(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|" +
+                    "^(?:[0-9a-fA-F]{1,4}:){1,7}:$" +
+                    "|^::$"
+        )
+        private val IPV4_REGEX = Regex(
+            "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}" +
+                    "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+        )
+
     }
 
     @Throws(UnknownHostException::class)
     override fun resolveDns(hostname: String, preferIpv4: Boolean, useCache: Boolean): List<String> {
+        if(IPV4_REGEX.matches(hostname) || IPV6_REGEX.matches(hostname)) return listOf(hostname)
         val dnsServer = getDefaultDnsServer().hostAddress ?: DEFAULT_FALLBACK_DNS
         Log.i(TAG, "Resolving endpoint with server: $dnsServer")
         val resolved = if (preferIpv4) {
