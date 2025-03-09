@@ -11,5 +11,6 @@ interface DnsResolver {
      * @return A list of string values denoting resolved IP addresses.
      * @throws UnknownHostException
      */
+    @Throws(UnknownHostException::class)
     fun resolveDns(hostname: String, preferIpv4: Boolean = false, useCache: Boolean) : List<String>
 }
