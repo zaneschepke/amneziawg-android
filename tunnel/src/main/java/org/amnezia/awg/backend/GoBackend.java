@@ -322,7 +322,7 @@ public final class GoBackend implements Backend {
             }
 
             // Build config
-            final String goConfig = config.toAwgUserspaceString(tunnel.isIpv4ResolutionPreferred());
+            final String goConfig = config.toAwgUserspaceString();
 
 
             // Create the vpn tunnel with android API

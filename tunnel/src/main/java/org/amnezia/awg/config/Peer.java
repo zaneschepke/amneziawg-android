@@ -190,7 +190,7 @@ public final class Peer {
      *
      * @return the {@code Peer} represented as a series of "key=value" lines
      */
-    public String toAwgUserspaceString(Boolean preferIpv4) {
+    public String toAwgUserspaceString() {
         final StringBuilder sb = new StringBuilder();
         // The order here is important: public_key signifies the beginning of a new peer.
         sb.append("public_key=").append(publicKey.toHex()).append('\n');
