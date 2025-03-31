@@ -318,6 +318,7 @@ public final class GoBackend implements Backend {
                 if (ep == null) continue;
                 final List<String> resolved = dnsResolver.resolveDns(ep.getHost(),tunnel.isIpv4ResolutionPreferred(), false);
                 if(resolved.isEmpty()) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
+                Log.d(TAG, "Resolved DN: " + resolved.get(0));
                 ep.setResolved(resolved.get(0));
             }
 

@@ -9,21 +9,13 @@ import org.xbill.DNS.*
 import java.net.*
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * A simple JavaDns Resolver implementation for Android.
- *
- * @param context An Android {@link Context}
- * @param preferredDnsServer Optional hostname or IP of the preferred DNS server to use for the resolution, default will be system configured DNS.
- * @param fallbackDnsServers Optional IP of the fallback DNS server to use, should there be issues with the preferred. Defaults to Cloudflare ipv4 and ipv6 respectively if not set.
- * @param timeoutSeconds Optional, defaults to 5.
- * @param maxRetries Optional, defaults to 2.
- */
 class JavaDnsResolver @JvmOverloads constructor(
-    private val context: Context,
+    context: Context,
     private val preferredDnsServer: String? = null,
     private val fallbackDnsServers: List<String> = listOf(DEFAULT_FALLBACK_DNS_IPV4, DEFAULT_FALLBACK_DNS_IPV6),
     private val timeoutSeconds: Int = 5,
-    private val maxRetries: Int = 2
+    private val maxRetries: Int = 2,
+    private val nat64Prefix: String? = "64:ff9b::" // Default well-known NAT64 prefix
 ) : DnsResolver {
 
     companion object {
@@ -33,18 +25,18 @@ class JavaDnsResolver @JvmOverloads constructor(
 
         private val IPV6_REGEX = Regex(
             "^(?:" +
-                    "\\[(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}]|" + // [full:ipv6]
-                    "\\[::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}]|" + // [::abbrev]
-                    "\\[[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}]|" + // [abbrev::]
-                    "\\[(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}]|" + // [partial:ipv6]
-                    "\\[(?:[0-9a-fA-F]{1,4}:){1,7}:]|" + // [ipv6:]
-                    "\\[::]|" + // [::]
-                    "(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|" + // full:ipv6
-                    "::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}|" + // ::abbrev
-                    "[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}|" + // abbrev::
-                    "(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|" + // partial:ipv6
-                    "(?:[0-9a-fA-F]{1,4}:){1,7}:|" + // ipv6:
-                    "::" + // ::
+                    "\\[(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}]|" +
+                    "\\[::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}]|" +
+                    "\\[[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}]|" +
+                    "\\[(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}]|" +
+                    "\\[(?:[0-9a-fA-F]{1,4}:){1,7}:]|" +
+                    "\\[::]|" +
+                    "(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|" +
+                    "::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}|" +
+                    "[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}|" +
+                    "(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|" +
+                    "(?:[0-9a-fA-F]{1,4}:){1,7}:|" +
+                    "::" +
                     ")$"
         )
         private val IPV4_REGEX = Regex(
@@ -59,112 +51,133 @@ class JavaDnsResolver @JvmOverloads constructor(
     init {
         require(timeoutSeconds > 0) { "Timeout must be positive" }
         require(maxRetries >= 0) { "Max retries must be non-negative" }
+        Log.d(
+            TAG,
+            "Initialized JavaDnsResolver with timeout=$timeoutSeconds, maxRetries=$maxRetries, nat64Prefix=$nat64Prefix"
+        )
     }
 
     @Throws(UnknownHostException::class)
     @Synchronized
     override fun resolveDns(hostname: String, preferIpv4: Boolean, useCache: Boolean): List<String> {
-        if (IPV4_REGEX.matches(hostname) || IPV6_REGEX.matches(hostname)) return listOf(hostname)
+        Log.i(TAG, "Starting DNS resolution for hostname=$hostname, preferIpv4=$preferIpv4, useCache=$useCache")
+        if (IPV4_REGEX.matches(hostname) || IPV6_REGEX.matches(hostname)) {
+            Log.d(TAG, "Hostname $hostname is already an IP address, returning as-is")
+            return listOf(hostname)
+        }
 
-        val dnsServers = listOfNotNull(
-            preferredDnsServer?.let { InetAddress.getByName(it) }?.hostAddress,
-            getDeviceDefaultDnsServer()?.hostAddress
-        ) + fallbackDnsServers
+        val dnsServers = listOfNotNull(preferredDnsServer) + fallbackDnsServers
+        Log.d(TAG, "DNS servers to try: $dnsServers")
 
         var result: List<InetAddress> = emptyList()
         for (dnsServer in dnsServers) {
-            Log.i(TAG, "Resolving $hostname with server: $dnsServer (preferIpv4=$preferIpv4)")
+            Log.i(TAG, "Attempting resolution of $hostname with server: $dnsServer")
             result = tryResolve(hostname, dnsServer, preferIpv4, useCache)
-            if (result.isNotEmpty()) break
+            if (result.isNotEmpty()) {
+                Log.i(TAG, "Successfully resolved $hostname to $result with server $dnsServer")
+                break
+            } else {
+                Log.w(TAG, "Resolution failed with server $dnsServer, trying next")
+            }
         }
-        return result.mapNotNull { it.hostAddress }
+        val finalResult = result.mapNotNull { it.hostAddress }
+        Log.i(TAG, "Final resolved addresses for $hostname: $finalResult")
+        return finalResult
     }
 
-    private fun tryResolve(hostname: String, dnsServer: String, preferIpv4: Boolean, useCache: Boolean): List<InetAddress> {
-        return if (preferIpv4) {
-            retryResolve(hostname, Type.A, dnsServer, useCache).ifEmpty {
-                retryResolve(hostname, Type.AAAA, dnsServer, useCache)
+    private fun tryResolve(
+        hostname: String,
+        dnsServer: String,
+        preferIpv4: Boolean,
+        useCache: Boolean
+    ): List<InetAddress> {
+        Log.d(TAG, "tryResolve: hostname=$hostname, dnsServer=$dnsServer, preferIpv4=$preferIpv4, useCache=$useCache")
+        return when {
+            preferIpv4 -> {
+                Log.d(TAG, "Preferring IPv4, trying A records first")
+                retryResolve(hostname, Type.A, dnsServer, useCache).ifEmpty {
+                    Log.d(TAG, "A records empty, falling back to AAAA")
+                    retryResolve(hostname, Type.AAAA, dnsServer, useCache)
+                }
             }
-        } else {
-            retryResolve(hostname, Type.AAAA, dnsServer, useCache).ifEmpty {
+
+            isIPv4OnlyNetwork() -> {
+                Log.d(TAG, "IPv4-only network detected, skipping AAAA, resolving A records only")
                 retryResolve(hostname, Type.A, dnsServer, useCache)
+            }
+
+            else -> {
+                Log.d(TAG, "Preferring IPv6, trying AAAA records first")
+                val aaaaResult = retryResolve(hostname, Type.AAAA, dnsServer, useCache)
+                if (aaaaResult.isEmpty() && isIPv6OnlyNetwork()) {
+                    Log.d(TAG, "AAAA empty and IPv6-only network, synthesizing IPv6 via DNS64")
+                    synthesizeIPv6FromIPv4(hostname, dnsServer, useCache)
+                } else {
+                    Log.d(TAG, "AAAA result: $aaaaResult, falling back to A if empty")
+                    aaaaResult.ifEmpty { retryResolve(hostname, Type.A, dnsServer, useCache) }
+                }
             }
         }
     }
 
     private fun isIPv4Capable(): Boolean {
-        val network = connectivityManager.activeNetwork ?: return false
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        val linkProperties = connectivityManager.getLinkProperties(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        val linkProperties = connectivityManager.getLinkProperties(network)
+        val result = network != null && capabilities != null && linkProperties != null &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 (linkProperties.dnsServers.any { it is Inet4Address } ||
                         linkProperties.linkAddresses.any { it.address is Inet4Address })
+        Log.d(
+            TAG,
+            "isIPv4Capable: $result (dnsServers=${linkProperties?.dnsServers}, linkAddresses=${linkProperties?.linkAddresses})"
+        )
+        return result
     }
 
     private fun isIPv6Capable(): Boolean {
-        val network = connectivityManager.activeNetwork ?: return false
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        val linkProperties = connectivityManager.getLinkProperties(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        val linkProperties = connectivityManager.getLinkProperties(network)
+        val result = network != null && capabilities != null && linkProperties != null &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 (linkProperties.dnsServers.any { it is Inet6Address } ||
-                        linkProperties.linkAddresses.any { it.address is Inet6Address })
+                        linkProperties.linkAddresses.any { addr ->
+                            addr.address is Inet6Address && !addr.address.isLinkLocalAddress
+                        })
+        Log.d(
+            TAG,
+            "isIPv6Capable: $result (dnsServers=${linkProperties?.dnsServers}, linkAddresses=${linkProperties?.linkAddresses})"
+        )
+        return result
     }
 
-    private fun getDeviceDefaultDnsServer(): InetAddress? {
-        val dnsServers = getSystemDnsServers()
-        val hasIPv4 = isIPv4Capable()
-        val hasIPv6 = isIPv6Capable()
-
-        return when {
-            !hasIPv4 && hasIPv6 -> dnsServers.firstOrNull { it is Inet6Address && isServerReachable(it) }
-                ?: InetAddress.getByName(DEFAULT_FALLBACK_DNS_IPV6)
-            hasIPv6 -> dnsServers.firstOrNull { it is Inet6Address && isServerReachable(it) }
-                ?: dnsServers.firstOrNull { it is Inet4Address && isServerReachable(it) }
-            hasIPv4 -> dnsServers.firstOrNull { it is Inet4Address && isServerReachable(it) }
-            else -> null
-        }
+    private fun isIPv6OnlyNetwork(): Boolean {
+        val result = isIPv6Capable() && !isIPv4Capable()
+        Log.d(TAG, "isIPv6OnlyNetwork: $result")
+        return result
     }
 
-    private fun getSystemDnsServers(): List<InetAddress> {
-        val network = connectivityManager.activeNetwork ?: return emptyList()
-        val linkProperties = connectivityManager.getLinkProperties(network) ?: return emptyList()
-
-        val dnsServers = mutableListOf<InetAddress>()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && linkProperties.isPrivateDnsActive) {
-            linkProperties.privateDnsServerName?.let { privateDns ->
-                try {
-                    val resolved = tryResolve(privateDns, DEFAULT_FALLBACK_DNS_IPV4, preferIpv4 = true, useCache = false)
-                    dnsServers.addAll(resolved.filter { isServerReachable(it) })
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to resolve private DNS $privateDns: ${e.message}")
-                }
-            }
-        }
-
-        dnsServers.addAll(linkProperties.dnsServers.filter { isServerReachable(it) })
-        return dnsServers
-    }
-
-    private fun isServerReachable(address: InetAddress): Boolean {
-        return try {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(address, 53), timeoutSeconds * 1000 / 2)
-                true
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Server ${address.hostAddress} not reachable: ${e.message}")
-            false
-        }
+    private fun isIPv4OnlyNetwork(): Boolean {
+        val result = isIPv4Capable() && !isIPv6Capable()
+        Log.d(TAG, "isIPv4OnlyNetwork: $result")
+        return result
     }
 
     private fun retryResolve(hostname: String, type: Int, dnsServer: String, useCache: Boolean): List<InetAddress> {
+        Log.d(
+            TAG,
+            "retryResolve: hostname=$hostname, type=${if (type == Type.A) "A" else "AAAA"}, dnsServer=$dnsServer, useCache=$useCache"
+        )
         var lastException: Exception? = null
         repeat(maxRetries + 1) { attempt ->
             try {
-                return resolve(hostname, type, dnsServer, useCache)
+                val result = resolve(hostname, type, dnsServer, useCache)
+                Log.d(TAG, "Resolved $hostname (type=${if (type == Type.A) "A" else "AAAA"}) to $result")
+                return result
             } catch (e: Exception) {
                 lastException = e
+                Log.w(TAG, "Attempt $attempt failed: ${e.message}")
                 if (attempt < maxRetries) {
                     Thread.sleep((1 shl attempt) * 1000L)
                 }
@@ -175,7 +188,10 @@ class JavaDnsResolver @JvmOverloads constructor(
     }
 
     private fun resolve(hostname: String, type: Int, dnsServer: String, useCache: Boolean): List<InetAddress> {
-        val recordType = when (type) { Type.AAAA -> "AAAA"; Type.A -> "A"; else -> "Unknown" }
+        val recordType = when (type) {
+            Type.AAAA -> "AAAA"; Type.A -> "A"; else -> "Unknown"
+        }
+        Log.d(TAG, "resolve: $hostname ($recordType) with $dnsServer")
 
         val lookup = Lookup(hostname, type)
         val resolver = SimpleResolver(dnsServer).apply {
@@ -191,12 +207,18 @@ class JavaDnsResolver @JvmOverloads constructor(
             lookup.setCache(if (useCache) dnsCache.get() else null)
 
             val records = lookup.run()
-            Log.d(TAG, "Lookup $hostname ($recordType) with $dnsServer: result=${lookup.result}")
+            Log.d(
+                TAG,
+                "Lookup $hostname ($recordType) with $dnsServer: result=${lookup.result}, error=${lookup.errorString}"
+            )
 
             return when (lookup.result) {
                 Lookup.SUCCESSFUL -> records?.mapNotNull {
-                    when (it) { is ARecord -> it.address; is AAAARecord -> it.address; else -> null }
+                    when (it) {
+                        is ARecord -> it.address; is AAAARecord -> it.address; else -> null
+                    }
                 } ?: emptyList()
+
                 Lookup.HOST_NOT_FOUND, Lookup.TYPE_NOT_FOUND -> emptyList()
                 Lookup.TRY_AGAIN -> throw SocketTimeoutException("DNS server $dnsServer timeout")
                 else -> throw UnknownHostException("DNS error: ${lookup.errorString}")
@@ -204,5 +226,31 @@ class JavaDnsResolver @JvmOverloads constructor(
         } finally {
             lookup.setResolver(null)
         }
+    }
+
+    private fun synthesizeIPv6FromIPv4(hostname: String, dnsServer: String, useCache: Boolean): List<InetAddress> {
+        Log.d(TAG, "Synthesizing IPv6 from IPv4 for $hostname using prefix $nat64Prefix")
+        val aRecords = retryResolve(hostname, Type.A, dnsServer, useCache)
+        if (aRecords.isEmpty()) {
+            Log.w(TAG, "No A records found to synthesize IPv6")
+            return emptyList()
+        }
+
+        val prefix = nat64Prefix?.let { Inet6Address.getByName(it) } ?: Inet6Address.getByName("64:ff9b::")
+        val prefixBytes = prefix.address.take(12).toByteArray() // /96 prefix is 12 bytes
+
+        val synthesized = aRecords.mapNotNull { ipv4 ->
+            try {
+                val ipv4Bytes = ipv4.address
+                val ipv6Bytes = prefixBytes + ipv4Bytes
+                val synthesizedAddr = Inet6Address.getByAddress(null, ipv6Bytes)
+                Log.d(TAG, "Synthesized $ipv4 to $synthesizedAddr")
+                synthesizedAddr
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to synthesize IPv6 for $ipv4: ${e.message}")
+                null
+            }
+        }
+        return synthesized
     }
 }
