@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     `maven-publish`
     signing
-    id("com.gradleup.nmcp").version("0.0.8")
+//    id("com.gradleup.nmcp").version("0.0.8")
 }
 
 android {
@@ -56,7 +56,7 @@ publishing {
         register<MavenPublication>("release") {
             groupId = "com.zaneschepke"
             artifactId = "droiddns"
-            version = "1.0.5"
+            version = "1.1.0"
             afterEvaluate {
                 from(components["release"])
             }
@@ -103,14 +103,13 @@ publishing {
 }
 
 
-nmcp {
-    publishAllPublications {
-        username = getLocalProperty("MAVEN_CENTRAL_USER")
-        password = getLocalProperty("MAVEN_CENTRAL_PASS")
-    }
-}
+//nmcp {
+//    publishAllPublications {
+//        username = getLocalProperty("MAVEN_CENTRAL_USER")
+//        password = getLocalProperty("MAVEN_CENTRAL_PASS")
+//    }
+//}
 
 signing {
-    useGpgCmd()
     sign(publishing.publications)
 }
