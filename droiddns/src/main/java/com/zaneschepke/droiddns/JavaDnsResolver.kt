@@ -52,6 +52,12 @@ class JavaDnsResolver @JvmOverloads constructor(
         )
     }
 
+    private val systemDnsServers: List<String> by lazy {
+        val linkProperties = connectivityManager.getLinkProperties(connectivityManager.activeNetwork)
+        linkProperties?.dnsServers?.mapNotNull { it.hostAddress } ?: emptyList()
+    }
+
+
     @Throws(UnknownHostException::class)
     @Synchronized
     override fun resolveDns(hostname: String, preferIpv4: Boolean, useCache: Boolean): List<String> {
@@ -63,7 +69,7 @@ class JavaDnsResolver @JvmOverloads constructor(
             return listOf(hostname)
         }
 
-        val dnsServers = listOfNotNull(preferredDnsServer) + fallbackDnsServers
+        val dnsServers = getDnsServers()
         Log.d(TAG, "DNS servers to try: $dnsServers")
 
         var result: List<InetAddress> = emptyList()
@@ -80,6 +86,12 @@ class JavaDnsResolver @JvmOverloads constructor(
         val finalResult = result.mapNotNull { it.hostAddress }
         Log.i(TAG, "Final resolved addresses for $hostname: $finalResult")
         return finalResult
+    }
+
+    private fun getDnsServers(): List<String> {
+        return listOfNotNull(preferredDnsServer) +
+                (if (preferredDnsServer == null) systemDnsServers else emptyList()) +
+                (if (preferredDnsServer == null && systemDnsServers.isEmpty()) fallbackDnsServers else emptyList())
     }
 
     private fun tryResolve(

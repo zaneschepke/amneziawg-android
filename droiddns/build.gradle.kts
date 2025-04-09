@@ -56,7 +56,7 @@ publishing {
         register<MavenPublication>("release") {
             groupId = "com.zaneschepke"
             artifactId = "droiddns"
-            version = "1.1.1"
+            version = "1.1.2"
             afterEvaluate {
                 from(components["release"])
             }
@@ -102,7 +102,7 @@ publishing {
     }
 }
 
-//
+
 //nmcp {
 //    publishAllPublications {
 //        username = getLocalProperty("MAVEN_CENTRAL_USER")

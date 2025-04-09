@@ -523,7 +523,7 @@ public final class GoBackend implements Backend {
                 } catch (IOException e) {
                     Log.e(TAG, "Failed to stop kill switch");
                 }
-            } else Log.w(TAG, "FD unable to close because it is null");
+            } else Log.i(TAG, "FD already closed");
         }
 
         @Override
