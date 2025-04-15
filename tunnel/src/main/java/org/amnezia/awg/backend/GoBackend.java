@@ -5,25 +5,16 @@
 
 package org.amnezia.awg.backend;
 
-import static org.amnezia.awg.GoBackend.awgGetConfig;
-import static org.amnezia.awg.GoBackend.awgGetSocketV4;
-import static org.amnezia.awg.GoBackend.awgGetSocketV6;
-import static org.amnezia.awg.GoBackend.awgTurnOff;
-import static org.amnezia.awg.GoBackend.awgTurnOn;
-import static org.amnezia.awg.GoBackend.awgVersion;
-
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.system.OsConstants;
 import android.util.Log;
-
 import androidx.annotation.Nullable;
 import androidx.collection.ArraySet;
-
-import com.zaneschepke.droiddns.DnsResolver;
-import com.zaneschepke.droiddns.JavaDnsResolver;
+import com.zaneschepke.droiddns.AndroidDnsResolver;
+import com.zaneschepke.droiddns.CustomDnsResolver;
 import org.amnezia.awg.backend.BackendException.Reason;
 import org.amnezia.awg.backend.Tunnel.State;
 import org.amnezia.awg.config.Config;
@@ -46,13 +37,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.amnezia.awg.GoBackend.*;
+
 /**
  * Implementation of {@link Backend} that uses the amneziawg-go userspace implementation to provide
  * AmneziaWG tunnels.
  */
 @NonNullForAll
 public final class GoBackend implements Backend {
-    private static final int DNS_RESOLUTION_RETRIES = 3;
     private static final String TAG = "AmneziaWG/GoBackend";
     @Nullable private static AlwaysOnCallback alwaysOnCallback;
     private static CompletableFuture<VpnService> vpnService = new CompletableFuture<>();
@@ -64,7 +56,7 @@ public final class GoBackend implements Backend {
     private BackendState backendState = BackendState.INACTIVE;
     private BackendState backendSettingState = BackendState.INACTIVE;
     private Collection<String> allowedIps = Collections.emptyList();
-    private final DnsResolver dnsResolver;
+    private final AndroidDnsResolver dnsResolver;
 
     /**
      * Public constructor for GoBackend.
@@ -75,7 +67,7 @@ public final class GoBackend implements Backend {
         SharedLibraryLoader.loadSharedLibrary(context, "am-go");
         this.context = context;
         this.tunnelActionHandler = tunnelActionHandler;
-        this.dnsResolver = new JavaDnsResolver(context);
+        this.dnsResolver = new CustomDnsResolver();
     }
 
     /**
@@ -316,10 +308,12 @@ public final class GoBackend implements Backend {
             for (final Peer peer : config.getPeers()) {
                 final InetEndpoint ep = peer.getEndpoint().orElse(null);
                 if (ep == null) continue;
-                final List<String> resolved = dnsResolver.resolveDns(ep.getHost(),tunnel.isIpv4ResolutionPreferred(), false);
+                // tunnel network for default network
+                final List<InetAddress> resolved = dnsResolver.resolveBlocking(ep.getHost(), tunnel.isIpv4ResolutionPreferred(), tunnel.useCache(), null);
                 if(resolved.isEmpty()) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
-                Log.d(TAG, "Resolved DN: " + resolved.get(0));
-                ep.setResolved(resolved.get(0));
+                if(resolved.get(0).getHostAddress() == null) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
+                Log.d(TAG, "Resolved DN: " + resolved.get(0).getHostAddress());
+                ep.setResolved(resolved.get(0).getHostAddress());
             }
 
             // Build config

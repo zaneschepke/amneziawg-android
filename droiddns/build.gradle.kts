@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.zaneschepke.droiddns"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 24
@@ -47,8 +47,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    //dns
-    implementation(libs.dnsjava)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.jdk8)
 }
 
 publishing {
@@ -56,7 +57,7 @@ publishing {
         register<MavenPublication>("release") {
             groupId = "com.zaneschepke"
             artifactId = "droiddns"
-            version = "1.1.2"
+            version = "1.1.3"
             afterEvaluate {
                 from(components["release"])
             }

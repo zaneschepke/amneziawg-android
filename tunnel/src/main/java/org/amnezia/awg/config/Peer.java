@@ -5,7 +5,6 @@
 
 package org.amnezia.awg.config;
 
-import android.util.Log;
 import org.amnezia.awg.config.BadConfigException.Location;
 import org.amnezia.awg.config.BadConfigException.Reason;
 import org.amnezia.awg.config.BadConfigException.Section;
