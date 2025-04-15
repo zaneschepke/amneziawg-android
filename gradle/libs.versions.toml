@@ -1,6 +1,6 @@
 [versions]
 agp = "8.9.1"
-droiddns = "1.1.3"
+droiddns = "1.1.4"
 kotlin = "2.1.20"
 junit = "1.2.1"
 espressoCore = "3.6.1"

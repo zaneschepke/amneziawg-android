@@ -57,7 +57,7 @@ publishing {
         register<MavenPublication>("release") {
             groupId = "com.zaneschepke"
             artifactId = "droiddns"
-            version = "1.1.3"
+            version = "1.1.4"
             afterEvaluate {
                 from(components["release"])
             }
