@@ -55,15 +55,21 @@ class CustomDnsResolver : AndroidDnsResolver {
                 Log.e(TAG, "Failed to parse IP: $hostnameSanitized", e)
                 continuation.resumeWithException(e)
             }
+            return@suspendCoroutine
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val flag = if(useCache) FLAG_EMPTY else FLAG_NO_CACHE_LOOKUP
+            val flag = if (useCache) FLAG_EMPTY else FLAG_NO_CACHE_LOOKUP
             val dnsResolver = getInstance()
             val cancellationSignal = CancellationSignal()
+            var isResumed = false
 
             val callback = object : Callback<List<InetAddress>> {
                 override fun onAnswer(answer: List<InetAddress>, rcode: Int) {
+                    synchronized(this) {
+                        if (isResumed) return
+                        isResumed = true
+                    }
                     try {
                         when {
                             rcode == 0 && answer.isNotEmpty() -> {
@@ -87,7 +93,12 @@ class CustomDnsResolver : AndroidDnsResolver {
                         cancellationSignal.cancel()
                     }
                 }
+
                 override fun onError(error: DnsException) {
+                    synchronized(this) {
+                        if (isResumed) return
+                        isResumed = true
+                    }
                     try {
                         continuation.resumeWithException(error)
                     } finally {
@@ -96,14 +107,22 @@ class CustomDnsResolver : AndroidDnsResolver {
                 }
             }
 
-            dnsResolver.query(
-                network,
-                hostname,
-                flag,
-                executor,
-                cancellationSignal,
-                callback
-            )
+            try {
+                dnsResolver.query(
+                    network,
+                    hostname,
+                    flag,
+                    executor,
+                    cancellationSignal,
+                    callback
+                )
+            } catch (e: Exception) {
+                synchronized(this) {
+                    if (!isResumed) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            }
         } else {
             try {
                 val addresses = InetAddress.getAllByName(hostname)
