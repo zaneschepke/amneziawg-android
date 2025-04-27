@@ -68,7 +68,7 @@ dependencies {
     compileOnly(libs.jsr305)
     testImplementation(libs.junit)
     implementation(libs.droiddns)
-    implementation(project(":droiddns"))
+//    implementation(project(":droiddns"))
 }
 
 publishing {

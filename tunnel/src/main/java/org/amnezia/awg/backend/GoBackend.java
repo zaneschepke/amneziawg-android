@@ -309,11 +309,16 @@ public final class GoBackend implements Backend {
                 final InetEndpoint ep = peer.getEndpoint().orElse(null);
                 if (ep == null) continue;
                 // tunnel network for default network
-                final List<InetAddress> resolved = dnsResolver.resolveBlocking(ep.getHost(), tunnel.isIpv4ResolutionPreferred(), tunnel.useCache(), null);
-                if(resolved.isEmpty()) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
-                if(resolved.get(0).getHostAddress() == null) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
-                Log.d(TAG, "Resolved DN: " + resolved.get(0).getHostAddress());
-                ep.setResolved(resolved.get(0).getHostAddress());
+                try {
+                    final List<InetAddress> resolved = dnsResolver.resolveBlocking(ep.getHost(), tunnel.isIpv4ResolutionPreferred(), tunnel.useCache(), null);
+                    if(resolved.isEmpty()) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
+                    if(resolved.get(0).getHostAddress() == null) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
+                    Log.d(TAG, "Resolved DN: " + resolved.get(0).getHostAddress());
+                    ep.setResolved(resolved.get(0).getHostAddress());
+                } catch (final Exception e) {
+                    Log.e(TAG, "Failed to resolve " + ep.getHost(), e);
+                    throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
+                }
             }
 
             // Build config
