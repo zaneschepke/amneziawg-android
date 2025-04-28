@@ -20,7 +20,7 @@ import androidx.annotation.Nullable;
  */
 @NonNullForAll
 public class Statistics {
-    public record PeerStats(long rxBytes, long txBytes, long latestHandshakeEpochMillis) { }
+    public record PeerStats(long rxBytes, long txBytes, long latestHandshakeEpochMillis, String resolvedEndpoint) {}
     private final Map<Key, PeerStats> stats = new HashMap<>();
     private long lastTouched = SystemClock.elapsedRealtime();
 
@@ -38,8 +38,8 @@ public class Statistics {
      * @param latestHandshake   The timestamp of the latest handshake for the {@link org.amnezia.config.Peer}
      *                          referenced by the provided {@link Key}. The value is in epoch milliseconds.
      */
-    void add(final Key key, final long rxBytes, final long txBytes, final long latestHandshake) {
-        stats.put(key, new PeerStats(rxBytes, txBytes, latestHandshake));
+    void add(final Key key, final String endpoint, final long rxBytes, final long txBytes, final long latestHandshake) {
+        stats.put(key, new PeerStats(rxBytes, txBytes, latestHandshake, endpoint));
         lastTouched = SystemClock.elapsedRealtime();
     }
 
