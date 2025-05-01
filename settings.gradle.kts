@@ -18,14 +18,13 @@ dependencyResolutionManagement {
 }
 
 plugins {
-    id("com.android.settings") version "8.8.1"
+    id("com.android.settings") version "8.8.2"
 }
 
 rootProject.name = "amneziawg-android"
 
 include(":tunnel")
 include(":ui")
-include(":droiddns")
 
 configure<SettingsExtension> {
     buildToolsVersion = "34.0.0"

@@ -38,13 +38,6 @@ public interface Tunnel {
     Boolean isIpv4ResolutionPreferred();
 
     /**
-     * Use DNS cache.
-     *
-     * @return true if okay to use DNS cache.
-     */
-    Boolean useCache();
-
-    /**
      * React to a change in state of the tunnel. Should only be directly called by Backend.
      *
      * @param newState The new state of the tunnel.

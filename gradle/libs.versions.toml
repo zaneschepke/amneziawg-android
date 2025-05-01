@@ -1,6 +1,5 @@
 [versions]
-agp = "8.9.1"
-droiddns = "1.1.5"
+agp = "8.9.2"
 kotlin = "2.1.20"
 junit = "1.2.1"
 espressoCore = "3.6.1"
@@ -21,7 +20,6 @@ androidx-fragment-ktx = "androidx.fragment:fragment-ktx:1.8.6"
 androidx-lifecycle-runtime-ktx = "androidx.lifecycle:lifecycle-runtime-ktx:2.8.7"
 androidx-preference-ktx = "androidx.preference:preference-ktx:1.2.1"
 desugarJdkLibs = "com.android.tools:desugar_jdk_libs:2.1.5"
-droiddns = { module = "com.zaneschepke:droiddns", version.ref = "droiddns" }
 google-material = "com.google.android.material:material:1.12.0"
 jsr305 = "com.google.code.findbugs:jsr305:3.0.2"
 junit = "junit:junit:4.13.2"

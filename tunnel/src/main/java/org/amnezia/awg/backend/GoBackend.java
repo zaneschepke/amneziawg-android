@@ -13,8 +13,6 @@ import android.system.OsConstants;
 import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.collection.ArraySet;
-import com.zaneschepke.droiddns.AndroidDnsResolver;
-import com.zaneschepke.droiddns.CustomDnsResolver;
 import org.amnezia.awg.backend.BackendException.Reason;
 import org.amnezia.awg.backend.Tunnel.State;
 import org.amnezia.awg.config.Config;
@@ -28,10 +26,7 @@ import org.amnezia.awg.util.SharedLibraryLoader;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -46,6 +41,7 @@ import static org.amnezia.awg.GoBackend.*;
 @NonNullForAll
 public final class GoBackend implements Backend {
     private static final String TAG = "AmneziaWG/GoBackend";
+    private static final int DNS_RESOLUTION_RETRIES = 3;
     @Nullable private static AlwaysOnCallback alwaysOnCallback;
     private static CompletableFuture<VpnService> vpnService = new CompletableFuture<>();
     private final Context context;
@@ -56,7 +52,6 @@ public final class GoBackend implements Backend {
     private BackendState backendState = BackendState.INACTIVE;
     private BackendState backendSettingState = BackendState.INACTIVE;
     private Collection<String> allowedIps = Collections.emptyList();
-    private final AndroidDnsResolver dnsResolver;
 
     /**
      * Public constructor for GoBackend.
@@ -67,7 +62,6 @@ public final class GoBackend implements Backend {
         SharedLibraryLoader.loadSharedLibrary(context, "am-go");
         this.context = context;
         this.tunnelActionHandler = tunnelActionHandler;
-        this.dnsResolver = new CustomDnsResolver();
     }
 
     /**
@@ -314,24 +308,35 @@ public final class GoBackend implements Backend {
             }
 
 
-            for (final Peer peer : config.getPeers()) {
-                final InetEndpoint ep = peer.getEndpoint().orElse(null);
-                if (ep == null) continue;
-                // tunnel network for default network
-                try {
-                    final List<InetAddress> resolved = dnsResolver.resolveBlocking(ep.getHost(), tunnel.isIpv4ResolutionPreferred(), tunnel.useCache(), null);
-                    if(resolved.isEmpty()) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
-                    if(resolved.get(0).getHostAddress() == null) throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
-                    Log.d(TAG, "Resolved DN: " + resolved.get(0).getHostAddress());
-                    ep.setResolved(resolved.get(0).getHostAddress());
-                } catch (final Exception e) {
-                    Log.e(TAG, "Failed to resolve " + ep.getHost(), e);
-                    throw new BackendException(Reason.DNS_RESOLUTION_FAILURE);
+            List<InetEndpoint> failedEndpoints = new ArrayList<>();
+            for (int i = 0; i < DNS_RESOLUTION_RETRIES; ++i) {
+                failedEndpoints.clear();
+                for (final Peer peer : config.getPeers()) {
+                    Optional<InetEndpoint> epOpt = peer.getEndpoint();
+                    if (epOpt.isEmpty()) continue;
+                    InetEndpoint ep = epOpt.get();
+                    if (ep.getResolved(tunnel.isIpv4ResolutionPreferred()).isEmpty()) {
+                        failedEndpoints.add(ep);
+                    }
+                }
+                if (failedEndpoints.isEmpty()) break;
+                if (i < DNS_RESOLUTION_RETRIES - 1) {
+                    for (InetEndpoint ep : failedEndpoints) {
+                        Log.w(TAG, "DNS host \"" + ep.getHost() + "\" failed (attempt " + (i + 1) + " of " + DNS_RESOLUTION_RETRIES + ")");
+                    }
+                    try {
+                        Thread.sleep(500L * (1 << i));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new BackendException(Reason.DNS_RESOLUTION_FAILURE, "Interrupted during DNS retry");
+                    }
+                } else {
+                    throw new BackendException(Reason.DNS_RESOLUTION_FAILURE, failedEndpoints.get(0).getHost());
                 }
             }
 
             // Build config
-            final String goConfig = config.toAwgUserspaceString();
+            final String goConfig = config.toAwgUserspaceString(tunnel.isIpv4ResolutionPreferred());
 
 
             // Create the vpn tunnel with android API

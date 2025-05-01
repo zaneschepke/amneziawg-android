@@ -190,13 +190,13 @@ public final class Peer {
      *
      * @return the {@code Peer} represented as a series of "key=value" lines
      */
-    public String toAwgUserspaceString() {
+    public String toAwgUserspaceString(Boolean preferIpv4) {
         final StringBuilder sb = new StringBuilder();
         // The order here is important: public_key signifies the beginning of a new peer.
         sb.append("public_key=").append(publicKey.toHex()).append('\n');
         for (final InetNetwork allowedIp : allowedIps)
             sb.append("allowed_ip=").append(allowedIp).append('\n');
-        endpoint.flatMap(InetEndpoint::getResolved).ifPresent(ep -> sb.append("endpoint=").append(ep).append('\n'));
+        endpoint.flatMap(ep -> ep.getResolved(preferIpv4)).ifPresent(ep -> sb.append("endpoint=").append(ep).append('\n'));
         persistentKeepalive.ifPresent(pk -> sb.append("persistent_keepalive_interval=").append(pk).append('\n'));
         preSharedKey.ifPresent(psk -> sb.append("preshared_key=").append(psk.toHex()).append('\n'));
         return sb.toString();

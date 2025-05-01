@@ -171,12 +171,12 @@ public final class Config {
      *
      * @return the {@code Config} represented as a series of "key=value" lines
      */
-    public String toAwgUserspaceString() {
+    public String toAwgUserspaceString(Boolean preferIpv4) {
         final StringBuilder sb = new StringBuilder();
         sb.append(interfaze.toAwgUserspaceString());
         sb.append("replace_peers=true\n");
         for (final Peer peer : peers)
-            sb.append(peer.toAwgUserspaceString());
+            sb.append(peer.toAwgUserspaceString(preferIpv4));
         return sb.toString();
     }
 
